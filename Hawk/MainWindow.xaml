@@ -10,7 +10,15 @@
         <Style   TargetType="{x:Type MenuItem}"  BasedOn="{StaticResource {x:Type MenuItem}}">
             <Setter Property="Header" Value="{Binding Text}" />
             <Setter Property="Command" Value="{Binding}" />
-
+            <Setter Property="Icon">
+                <Setter.Value>
+                    <Rectangle>
+                        <Rectangle.Fill>
+                            <VisualBrush Stretch="Fill" Visual="{Binding Icon, Converter={StaticResource MetroConverter}}" />
+                        </Rectangle.Fill>
+                    </Rectangle>
+                </Setter.Value>
+            </Setter>
             <Setter Property="ItemsSource" Value="{Binding ChildActions}" />
             <Setter Property="HorizontalContentAlignment" Value="{Binding HorizontalContentAlignment, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"/>
             <Setter Property="VerticalContentAlignment" Value="{Binding VerticalContentAlignment, RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}"/>
@@ -31,7 +39,7 @@
 
 
         <Grid.RowDefinitions>
-            <RowDefinition Height="24"/>
+            <RowDefinition Height="28"/>
             <RowDefinition Height="0.95*"/>
             <RowDefinition Height="24"/>
 
@@ -48,17 +56,18 @@
             </Avalondock:DockingManager.Theme>
             <Avalondock:LayoutRoot >
                 <Avalondock:LayoutPanel Orientation="Horizontal">
-                    <Avalondock:LayoutPanel Orientation="Vertical"  DockWidth="3*" >
+                 
+                    <Avalondock:LayoutPanel Orientation="Vertical"  DockWidth="8*" >
                         <Avalondock:LayoutAnchorablePane DockHeight="8*" x:Name="documentMain"/>
                         <Avalondock:LayoutAnchorablePane DockHeight="1.2*" x:Name="documentButtom" >
                             <Avalondock:LayoutAnchorable/>
                         </Avalondock:LayoutAnchorablePane>
                     </Avalondock:LayoutPanel>
-                    <Avalondock:LayoutPanel Orientation="Vertical" DockWidth="1*" >
-                        <Avalondock:LayoutAnchorablePane DockHeight="6*" x:Name="dockablePane1">
+                    <Avalondock:LayoutPanel  Orientation="Vertical" DockWidth="1.5*" >
+                        <Avalondock:LayoutAnchorablePane  x:Name="dockablePane1">
                             <Avalondock:LayoutAnchorable/>
                         </Avalondock:LayoutAnchorablePane>
-                        <Avalondock:LayoutAnchorablePane DockHeight="4*" x:Name="dockablePane2"/>
+
                     </Avalondock:LayoutPanel>
 
                 </Avalondock:LayoutPanel>

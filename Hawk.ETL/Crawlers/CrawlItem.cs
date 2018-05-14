@@ -1,21 +1,28 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows.Controls.WpfPropertyGrid.Attributes;
+using Hawk.Core.Connectors;
 using Hawk.Core.Utils;
 using Hawk.Core.Utils.MVVM;
 using Hawk.Core.Utils.Plugins;
 
 namespace Hawk.ETL.Crawlers
 {
+
+  
+ 
     public class CrawlItem : PropertyChangeNotifier, IDictionarySerializable
     {
         private string name;
 
         private string xpath;
+        private bool _isSelected;
 
         public CrawlItem()
         {
             SampleData1 = "";
+            IsEnabled = true;
         }
 
         /// <summary>
@@ -34,10 +41,15 @@ namespace Hawk.ETL.Crawlers
                 }
             }
         }
-        [LocalizedDisplayName("是否保存HTML")]
-        public bool IsHTML { get; set; }
+        [LocalizedDisplayName("目标内容")]
+        public CrawlType CrawlType { get; set; }
 
-        [LocalizedDisplayName("XPath")]
+        
+
+        [LocalizedDisplayName("选择器")]
+        public SelectorFormat Format { get; set; }
+
+        [LocalizedDisplayName("路径")]
         [PropertyOrder(1)]
         public string XPath
         {
@@ -52,7 +64,23 @@ namespace Hawk.ETL.Crawlers
             }
         }
 
+        [LocalizedDisplayName("可用")]
+        [PropertyOrder(2)]
+        public bool IsEnabled { get; set; }
 
+        [Browsable(false)]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    OnPropertyChanged("IsSelected");
+                }
+            }
+        }
 
 
         /// <summary>
@@ -66,7 +94,7 @@ namespace Hawk.ETL.Crawlers
 
         public FreeDocument DictSerialize(Scenario scenario = Scenario.Database)
         {
-            var doc = new FreeDocument { { "Name", Name }, { "XPath", XPath },{"IsHtml", IsHTML } };
+            var doc = new FreeDocument { { "Name", Name }, { "XPath", XPath },{ "CrawlType", CrawlType }, { "IsEnabled",IsEnabled },{ "Format", Format} };
             return doc;
         }
 
@@ -74,7 +102,9 @@ namespace Hawk.ETL.Crawlers
         {
             Name = docu.Set("Name", Name);
             XPath = docu.Set("XPath", XPath);
-            IsHTML = docu.Set("IsHtml", IsHTML);
+            CrawlType = docu.Set("CrawlType", CrawlType);
+            IsEnabled = docu.Set("IsEnabled", IsEnabled);
+            Format = docu.Set("Format", Format);
         }
 
         public override string ToString()

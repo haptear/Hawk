@@ -2,18 +2,18 @@
 using System.ComponentModel;
 using System.Linq;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Controls.WpfPropertyGrid.Attributes;
 using Hawk.Core.Connectors;
 using Hawk.Core.Utils;
+using Hawk.Core.Utils.Logs;
 using Hawk.Core.Utils.Plugins;
 using Hawk.ETL.Crawlers;
 using Hawk.ETL.Plugins.Generators;
 
 namespace Hawk.ETL.Plugins.Transformers
 {
-    [XFrmWork("从爬虫转换", "使用网页采集器获取网页数据，拖入的列需要为超链接")]
+    [XFrmWork("从爬虫转换", "使用网页采集器获取网页数据，拖入的列需要为超链，常用","carema")]
     public class CrawlerTF : ResponseTF
     {
         private BfsGE generator;
@@ -32,7 +32,6 @@ namespace Hawk.ETL.Plugins.Transformers
         [LocalizedDisplayName("最大重复次数")]
         public string MaxTryCount { get; set; }
 
-
         [LocalizedCategory("高级设置")]
         [LocalizedDisplayName("错误延时时间")]
         public int ErrorDelay { get; set; }
@@ -40,37 +39,32 @@ namespace Hawk.ETL.Plugins.Transformers
         [LocalizedDisplayName("Post数据")]
         public string PostData { get; set; }
 
-
-
-
         public override bool Init(IEnumerable<IFreeDocument> datas)
         {
-            
-
             base.Init(datas);
 
-            IsMultiYield = crawler?.IsMultiData == ListType.List && crawler.CrawlItems.Count>0;
+            IsMultiYield = Crawler?.IsMultiData == ScriptWorkMode.List && Crawler.CrawlItems.Count > 0;
 
-            return crawler != null;
+            return Crawler != null;
         }
 
-        private List<FreeDocument> GetDatas(IFreeDocument data)
+        private IEnumerable<FreeDocument> GetDatas(IFreeDocument data)
         {
             var p = data[Column];
-            if (p == null)
+            if (p == null || Crawler == null)
                 return new List<FreeDocument>();
             var url = p.ToString();
             var bufkey = url;
             var post = data.Query(PostData);
-            if (crawler.Http.Method == MethodType.POST)
+
+            if (Crawler.Http.Method == MethodType.POST)
             {
                 bufkey += post;
             }
             var htmldoc = buffHelper.Get(bufkey);
-            var docs = new List<FreeDocument>();
+
             if (htmldoc == null)
             {
-
                 HttpStatusCode code;
                 var maxcount = 1;
                 int.TryParse(data.Query(MaxTryCount), out maxcount);
@@ -78,11 +72,11 @@ namespace Hawk.ETL.Plugins.Transformers
                 var count = 0;
                 while (count < maxcount)
                 {
-                    docs = crawler.CrawlData(url, out htmldoc, out code, post);
-                    if (HttpHelper.IsSuccess(code) && docs.Count>0)
+                  var   docs = Crawler.CrawlData(url, out htmldoc, out code, post);
+                    if (HttpHelper.IsSuccess(code))
                     {
                         buffHelper.Set(bufkey, htmldoc);
-                        break;
+                        return docs;
                     }
                     Thread.Sleep(ErrorDelay);
                     count++;
@@ -90,31 +84,24 @@ namespace Hawk.ETL.Plugins.Transformers
             }
             else
             {
-                docs = crawler.CrawlData(htmldoc);
+                return Crawler.CrawlData(htmldoc.DocumentNode);
             }
+            return new List<FreeDocument>(); 
 
-          
-            return docs;
         }
 
-        public override IEnumerable<IFreeDocument> TransformManyData(IEnumerable<IFreeDocument> datas)
+        protected override IEnumerable<IFreeDocument> InternalTransformManyData(IFreeDocument data)
         {
-            foreach (var data in datas)
-            {
-                var docs = GetDatas(data);
-                foreach (var doc in docs)
-                {
-                    yield return doc.MergeQuery(data, NewColumn);
-                }
-            }
+            var docs = GetDatas(data);
+            return docs.Select(d => d.MergeQuery(data, NewColumn));
         }
 
         public override object TransformData(IFreeDocument datas)
         {
             var docs = GetDatas(datas);
-            if (docs.Count > 0)
+            var first = docs.FirstOrDefault();
+            if (first!=null)
             {
-                var first = docs.First();
                 first.DictCopyTo(datas);
             }
 

@@ -1,29 +1,149 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Windows;
+using System.Windows.Controls.WpfPropertyGrid;
 using System.Windows.Controls.WpfPropertyGrid.Attributes;
+using System.Windows.Controls.WpfPropertyGrid.Controls;
 using Hawk.Core.Connectors;
 using Hawk.Core.Utils;
-using Hawk.Core.Utils.Logs;
 using Hawk.Core.Utils.MVVM;
 using Hawk.Core.Utils.Plugins;
-using Hawk.ETL.Crawlers;
 using Hawk.ETL.Interfaces;
 using Hawk.ETL.Process;
 
 namespace Hawk.ETL.Plugins.Transformers
 {
-    public abstract class TransformerBase : PropertyChangeNotifier, IColumnDataTransformer
+    public abstract class ToolBase : PropertyChangeNotifier, IColumnProcess
     {
-        [Browsable(false)]
-        public int ETLIndex { get; set; }
+        private bool _enabled;
+        private int _etlIndex;
+        protected bool IsExecute = true;
 
-        #region Public Methods
+        protected ToolBase()
+        {
+            ColumnSelector = new TextEditSelector();
+            ColumnSelector.SelectChanged += (s, e) => Column = ColumnSelector.SelectItem;
+        }
+
+        [LocalizedCategory("1.基本选项"), PropertyOrder(1), DisplayName("输入列")]
+        [LocalizedDescription("本模块要处理的列的名称")]
+        public TextEditSelector ColumnSelector { get; set; }
+
+      
+        public virtual void Finish()
+        {
+        }
+
+        public virtual bool Init(IEnumerable<IFreeDocument> docus)
+        {
+            return true;
+        }
+
+        public virtual void DictDeserialize(IDictionary<string, object> docu, Scenario scenario = Scenario.Database)
+        {
+            this.UnsafeDictDeserializePlus(docu);
+        }
+
+        public virtual FreeDocument DictSerialize(Scenario scenario = Scenario.Database)
+        {
+            var dict = this.UnsafeDictSerializePlus();
+            dict.Add("Type", GetType().Name);
+            dict.Remove("ETLIndex");
+            dict.Remove("ColumnSelector");
+            return dict;
+        }
+
+        [Browsable(false)]
+        public string Column
+        {
+            get { return ColumnSelector.SelectItem; }
+            set
+            {
+                if (value != ColumnSelector.SelectItem)
+                {
+                    ColumnSelector.SelectItem = value;
+                    OnPropertyChanged("Column");
+                }
+            }
+        }
+
+        [LocalizedDisplayName("介绍")]
+        [PropertyOrder(100)]
+        [PropertyEditor("CodeEditor")]
+        public string Description
+        {
+            get
+            {
+                var item = AttributeHelper.GetCustomAttribute(GetType());
+                if (item == null)
+                    return GetType().ToString();
+                return item.Description;
+            }
+        }
+
+        public void SetExecute(bool value)
+        {
+            IsExecute = value;
+        }
+
+        [LocalizedCategory("1.基本选项")]
+        [LocalizedDisplayName("启用")]
+        [PropertyOrder(5)]
+        public bool Enabled
+        {
+            get { return _enabled; }
+            set
+            {
+                if (_enabled == value) return;
+                _enabled = value;
+                OnPropertyChanged("Enabled");
+            }
+        }
+
+        [Browsable(false)]
+        public SmartETLTool Father { get; set; }
+
+        [Browsable(false)]
+        public int ETLIndex
+        {
+            get { return _etlIndex; }
+            set
+            {
+                if (_etlIndex != value)
+                {
+                    _etlIndex = value;
+                    OnPropertyChanged("ETLIndex");
+                }
+            }
+        }
+
+        [LocalizedCategory("1.基本选项")]
+        [LocalizedDisplayName("类型")]
+        [PropertyOrder(0)]
+        public string TypeName
+        {
+            get
+            {
+                var item = AttributeHelper.GetCustomAttribute(GetType());
+                return item == null ? GetType().ToString() : item.Name;
+            }
+        }
+
+        [Browsable(false)]
+        public XFrmWorkAttribute Attribute => AttributeHelper.GetCustomAttribute(GetType());
 
         public override string ToString()
         {
             return TypeName + " " + Column;
         }
+    }
+
+    public abstract class TransformerBase : ToolBase, IColumnDataTransformer
+    {
+        #region Public Methods
 
         #endregion
 
@@ -35,12 +155,8 @@ namespace Hawk.ETL.Plugins.Transformers
 
         protected bool IsExecute;
 
-        public void SetExecute(bool value)
-        {
-            IsExecute = value;
-        }
 
-        protected readonly IProcessManager processManager;
+        [Browsable(false)] protected readonly IProcessManager processManager;
 
         protected TransformerBase()
         {
@@ -63,33 +179,10 @@ namespace Hawk.ETL.Plugins.Transformers
                     name = crawlers[0].Name;
                 }
             }
-            var crawler =
-                crawlers.FirstOrDefault(d => d.Name == name);
+            var crawler = this.GetModule<SmartCrawler>(name);
             if (crawler != null)
             {
-                IsMultiYield = crawler?.IsMultiData == ListType.List;
-            }
-            else
-            {
-                var task = processManager.CurrentProject.Tasks.FirstOrDefault(d => d.Name == name);
-                if (task != null)
-                {
-                    ControlExtended.UIInvoke(() => { task.Load(false); });
-                    crawler =
-                        processManager.CurrentProcessCollections.FirstOrDefault(d => d.Name == name) as
-                            SmartCrawler;
-                }
-                if (crawler == null)
-                {
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        XLogSys.Print.Error($"您没有填写“从爬虫转换”的“爬虫选择”。需要填写要调用的网页采集器的名称");
-                    }
-                    else
-                    {
-                        XLogSys.Print.Error($"没有找到名称为'{name}'的网页采集器，请检查“从爬虫转换”的“爬虫选择”是否填写错误");
-                    }
-                }
+                IsMultiYield = crawler?.IsMultiData == ScriptWorkMode.List;
             }
             return crawler;
         }
@@ -98,45 +191,20 @@ namespace Hawk.ETL.Plugins.Transformers
 
         #region Properties
 
-        [LocalizedCategory("1.基本选项"), PropertyOrder(1), DisplayName("输入列")]
-        [LocalizedDescription("本模块要处理的列的名称")]
-        public string Column { get; set; }
-
-        [LocalizedDisplayName("介绍")]
-        [PropertyOrder(100)]
-        [PropertyEditor("CodeEditor")]
-        public string Description
-        {
-            get
-            {
-                var item = AttributeHelper.GetCustomAttribute(GetType());
-                if (item == null)
-                    return GetType().ToString();
-                return item.Description;
-            }
-        }
-
-
         [LocalizedCategory("1.基本选项")]
         [PropertyOrder(2)]
         [LocalizedDisplayName("输出列")]
         [LocalizedDescription("结果要输出到的列的名称")]
-        public virtual string NewColumn { get; set; }
-
-
-        private bool _enabled;
-
-        [LocalizedCategory("1.基本选项")]
-        [LocalizedDisplayName("启用")]
-        [PropertyOrder(5)]
-        public bool Enabled
+        public virtual string NewColumn
         {
-            get { return _enabled; }
+            get { return _newColumn; }
             set
             {
-                if (_enabled == value) return;
-                _enabled = value;
-                OnPropertyChanged("Enabled");
+                if (_newColumn != value)
+                {
+                    OnPropertyChanged("NewColumn");
+                    _newColumn = value;
+                }
             }
         }
 
@@ -146,19 +214,6 @@ namespace Hawk.ETL.Plugins.Transformers
         /// </summary>
         [Browsable(false)]
         public virtual bool OneOutput { get; set; }
-
-
-        [LocalizedCategory("1.基本选项")]
-        [LocalizedDisplayName("类型")]
-        [PropertyOrder(0)]
-        public string TypeName
-        {
-            get
-            {
-                var item = AttributeHelper.GetCustomAttribute(GetType());
-                return item == null ? GetType().ToString() : item.Name;
-            }
-        }
 
         #endregion
 
@@ -183,8 +238,72 @@ namespace Hawk.ETL.Plugins.Transformers
                 doc.SetValue(NewColumn, item);
         }
 
+        private bool isErrorRemind = true;
+        private string _newColumn;
 
         public virtual IEnumerable<IFreeDocument> TransformManyData(IEnumerable<IFreeDocument> datas)
+
+        {
+            var olddatas = datas;
+            var errorCounter = 0;
+            foreach (var data in datas)
+            {
+                var newdatas = InternalTransformManyData(data);
+                if (MainDescription.IsUIForm)
+                {
+                    if (((olddatas is IList) == false || !olddatas.Any()) && newdatas is IList &&
+                        (!newdatas.Any()))
+                    {
+                        errorCounter++;
+                        if (errorCounter == 5 && isErrorRemind)
+                        {
+                            //连续三次无值输出，表示为异常现象
+                            if (ControlExtended.UIInvoke(() =>
+                            {
+                                var result =
+                                    MessageBox.Show(
+                                        $"作用在列名`{Column}`的 模块`{TypeName}` 已经连续 {5} 次没有成功获取数据，可能需要重新修改参数 \n 【是】：【进入调试模式】 \n 【否】：【取消当前任务】 \n 【取消】：【不再提示】",
+                                        "参数设置可能有误",
+                                        MessageBoxButton.YesNoCancel);
+                                if (result == MessageBoxResult.Yes)
+                                {
+                                    var window = PropertyGridFactory.GetPropertyWindow(this);
+
+                                    var list = processManager.CurrentProcessTasks.Where(
+                                        task => task.Publisher == Father && task.IsPause == false).ToList();
+                                    list.Execute(task => task.Remove());
+
+// window.Closed += (s, e) => Father.ETLMount++;
+                                    Father.ETLMount = Math.Max(0, Father.CurrentETLTools.IndexOf(this));
+                                    window.ShowDialog();
+                                    window.Topmost = true;
+                                    return true;
+                                }
+                                if (result == MessageBoxResult.Cancel)
+                                {
+                                    isErrorRemind = false;
+                                    return true;
+                                }
+                                return false;
+                            }) == false)
+                                yield break;
+                        }
+                    }
+                    else
+                    {
+                        errorCounter = 0;
+                    }
+                }
+                if (newdatas == null)
+                    yield break;
+                foreach (var newdata in newdatas)
+                {
+                    yield return newdata;
+                }
+            }
+        }
+
+        protected virtual IEnumerable<IFreeDocument> InternalTransformManyData(IFreeDocument datas)
         {
             yield break;
         }
@@ -193,31 +312,23 @@ namespace Hawk.ETL.Plugins.Transformers
 
         #region IColumnProcess
 
-        public virtual void Finish()
-        {
-        }
-
-        public virtual bool Init(IEnumerable<IFreeDocument> docus)
-        {
-            return true;
-        }
-
         #endregion
 
         #region IDictionarySerializable
 
-        public virtual void DictDeserialize(IDictionary<string, object> docu, Scenario scenario = Scenario.Database)
+        public override FreeDocument DictSerialize(Scenario scenario = Scenario.Database)
         {
-            this.UnsafeDictDeserialize(docu);
+            var dict = base.DictSerialize();
+            dict.Add("Group", "Transformer");
+            return dict;
         }
 
-        public virtual FreeDocument DictSerialize(Scenario scenario = Scenario.Database)
+        public override void DictDeserialize(IDictionary<string, object> docu, Scenario scenario = Scenario.Database)
         {
-            var dict = this.UnsafeDictSerialize();
-            dict.Add("Type", GetType().Name);
-            dict.Add("Group", "Transformer");
-            dict.Remove("ETLIndex");
-            return dict;
+            var dict = base.DictSerialize();
+            AppHelper.ConfigVersionConverter(dict, docu);
+            //向上兼容性转换
+            base.DictDeserialize(docu);
         }
 
         #endregion

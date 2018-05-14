@@ -17,11 +17,19 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using AvalonDock.Layout;
+using Hawk.Core.Utils;
 using Hawk.Core.Utils.Logs;
 using Hawk.Core.Utils.MVVM;
 using Hawk.Core.Utils.Plugins;
 using Hawk.ETL.Controls;
+using Hawk.ETL.Interfaces;
+using Hawk.ETL.Managements;
 using log4net.Config;
+using ToastNotifications;
+using ToastNotifications.Core;
+using ToastNotifications.Lifetime;
+using ToastNotifications.Messages;
+using ToastNotifications.Position;
 using Path = System.IO.Path;
 
 namespace Hawk
@@ -47,6 +55,21 @@ namespace Hawk
 #endif
             InitializeComponent();
             MainDescription.MainFrm = this;
+            this.notifier = new Notifier(cfg =>
+            {
+                cfg.PositionProvider = new WindowPositionProvider(
+                    parentWindow: Application.Current.MainWindow,
+                    corner: Corner.TopRight,
+                    offsetX: 10,
+                    offsetY: 10);
+
+                cfg.LifetimeSupervisor = new TimeAndCountBasedLifetimeSupervisor(
+                    notificationLifetime: TimeSpan.FromSeconds(3),
+                    maximumNotificationCount: MaximumNotificationCount.FromCount(5));
+
+                cfg.Dispatcher = Application.Current.Dispatcher;
+            });
+
             Application.Current.Resources["ThemeDictionary"] = new ResourceDictionary();
             //   this.SetCurrentTheme("ShinyBlue");
         ;
@@ -62,7 +85,7 @@ namespace Hawk
 
             XmlConfigurator.Configure(new FileInfo("log4net.config"));
 
-
+       
             string icon = ConfigurationManager.AppSettings["Icon"];
             try
             {
@@ -79,7 +102,7 @@ namespace Hawk
             Dispatcher.UnhandledException += (s, e) =>
             {
 
-                if (MessageBox.Show("是否保存当前工程的内容？您只有一次机会这样做，", "警告信息", MessageBoxButton.YesNoCancel) ==
+                if (MessageBox.Show("是否保存当前工程的内容？您只有一次机会这样做，", "Hawk由于内部异常而崩溃", MessageBoxButton.YesNoCancel) ==
                     MessageBoxResult.Yes)
                 {
                     dynamic process = PluginDictionary["模块管理"];
@@ -109,20 +132,49 @@ namespace Hawk
             }
             XLogSys.Print.Info(Title +Core.Properties.Resources.Start);
 
-
+  
             Closing += (s, e) =>
             {
-                if (MessageBox.Show(Core.Properties.Resources.Closing, Core.Properties.Resources.Tips, MessageBoxButton.OKCancel) == MessageBoxResult.OK)
-
+                List<IDataProcess> revisedTasks;
+                var processmanager = PluginDictionary["模块管理"] as DataProcessManager;
+                revisedTasks = processmanager.GetRevisedTasks().ToList();
+                if (!revisedTasks.Any())
                 {
-                    PluginManager.Close();
-                    PluginManager.SaveConfigFile();
-                    Process.GetCurrentProcess().Kill();
+                    if (MessageBox.Show(Core.Properties.Resources.Closing, Core.Properties.Resources.Tips, MessageBoxButton.OKCancel) == MessageBoxResult.OK)
+                    {
+                        PluginManager.Close();
+                        PluginManager.SaveConfigFile();
+                        Process.GetCurrentProcess().Kill();
+                    }
+                    else
+                    {
+                        e.Cancel = true;
+                    }
                 }
                 else
                 {
-                    e.Cancel = true;
+
+                    var result =
+                        MessageBox.Show(
+                            $"【{" ".Join(revisedTasks.Select(d => d.Name).ToArray())}】任务可能还没有保存，\n【是】:保存任务并退出, \n【否】：不保存退出，\n【取消】:取消退出", Core.Properties.Resources.Tips,
+                            MessageBoxButton.YesNoCancel);
+                    if(result==MessageBoxResult.Yes || result==MessageBoxResult.No)
+                    {
+                        if (result == MessageBoxResult.Yes)
+                        {
+                            revisedTasks.Execute(d => processmanager.SaveTask(d, false));
+
+                        }
+                        PluginManager.Close();
+                        PluginManager.SaveConfigFile();
+                        Process.GetCurrentProcess().Kill();
+                    }
+                    else
+                    {
+                        e.Cancel = true;
+                    }
                 }
+              
             };
             //  TestCode();
 #if !DEBUG
@@ -135,6 +187,10 @@ namespace Hawk
             }
 #endif
         }
+
+        private Notifier notifier;
+   
+
         public ObservableCollection<IAction> CommandCollection { get; set; }
         private void SetCommandKeyBinding(ICommand command)
         {
@@ -262,7 +318,7 @@ namespace Hawk
                     case FrmState.Large:
                         layout = Factory(name, thisControl);
                         documentMain.Children.Add(layout);
-
+                      
                         layout.IsActive = true;
                         break;
                     case FrmState.Buttom:
@@ -271,25 +327,32 @@ namespace Hawk
                         var view = thisControl as DebugManagerUI;
                         if (view != null)
                         {
-                            RichTextBoxAppender.SetRichTextBox(view.richtextBox, DebugText);
+                            RichTextBoxAppender.SetRichTextBox(view.richtextBox, DebugText,notifier);
                         }
 
                         documentButtom.Children.Add(layout);
-
+                        documentButtom.Children.RemoveElementsNoReturn(d => d.Content == null);
                         layout.IsActive = true;
-                        break;
+                        break;  
                     case FrmState.Middle:
                         layout = Factory(name, thisControl);
                         viewitem.Container = layout;
                         dockablePane1.Children.Add(layout);
-
+                        dockablePane1.Children.RemoveElementsNoReturn(d=>d.Content==null);
                         layout.IsActive = true;
-                        break;
+                        break;                
                     case FrmState.Mini:
                         layout = Factory(name, thisControl);
                         viewitem.Container = layout;
-                        dockablePane2.Children.Add(layout);
-
+                        dockablePane1.Children.Add(layout);
+                        dockablePane1.Children.RemoveElementsNoReturn(d => d.Content == null);
+                        layout.IsActive = true;
+                        break;
+                    case FrmState.Mini2:
+                        layout = Factory(name, thisControl);
+                        viewitem.Container = layout;
+                        dockablePane1.Children.Add(layout);
+                        dockablePane1.Children.RemoveElementsNoReturn(d => d.Content == null);
                         layout.IsActive = true;
                         break;
                     case FrmState.Custom:
@@ -302,12 +365,15 @@ namespace Hawk
 
                         layout = Factory(name, thisControl);
 
-                        dockablePane2.Children.Add(layout);
+                        dockablePane1.Children.Add(layout);
 
                         layout.Float();
                                     
                         break;
                 }
+                var canNotClose= new string[] {"模块管理","系统状态视图","调试信息窗口"};
+                if (canNotClose.Contains(name))
+                    if (layout != null) layout.CanClose = false;
                 viewitem.Container = layout;
             }
             catch (Exception ex)

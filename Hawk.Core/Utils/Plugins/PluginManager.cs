@@ -47,7 +47,7 @@ namespace Hawk.Core.Utils.Plugins
         public BindingAction FileCommands => new BindingAction("文件")
         {
             ChildActions =
-                new ObservableCollection<ICommand> (),
+                new ObservableCollection<ICommand> (),Icon = "disk"
         };
 
         public FrmState FrmState => FrmState.Mini;
@@ -91,8 +91,9 @@ namespace Hawk.Core.Utils.Plugins
             if (PluginLoadControllor.IsNormalLoaded == false)
             {
                 PluginLoadControllor.Instance.AddBuildLogic<IXPlugin>(plugins);
+                PluginProvider.SaveConfigFile();
             }
-            PluginProvider.SaveConfigFile();
+      
 
             XLogSys.Print.Info("开始对插件字典中的插件进行初始化");
             //var pluginCommands = new BindingAction("插件");
@@ -154,14 +155,14 @@ namespace Hawk.Core.Utils.Plugins
             foreach (IXPlugin plugin in orderdPlugins)
             {
                 var rc3 = plugin as IMainFrmMenu;
-                if (rc3 != null)
+                if (rc3 != null &&rc3.BindingCommands!=null)
                 {
                     this.MainFrmUI.CommandCollection.Add(rc3.BindingCommands);
                 }
                 var ui = plugin as IView;
                 if (ui != null)
                 {
-                   var control=  AddCusomView(this.MainFrmUI as IDockableManager,plugin.TypeName,ui);
+                   var control=  AddCusomView(this.MainFrmUI as IDockableManager,plugin.TypeName,ui,plugin.Name);
                     if (control is UserControl)
                     {
                         (control as UserControl).DataContext = ui;
@@ -177,7 +178,7 @@ namespace Hawk.Core.Utils.Plugins
         /// <param name="plugin"></param>
         /// <param name="model"></param>
         /// <param name="bindingAction"></param>
-        public  static object AddCusomView(IDockableManager dockableManager, string pluginName, IView model)
+        public  static object AddCusomView(IDockableManager dockableManager, string pluginName, IView model,string name)
         {
             if (dockableManager == null || model == null)
                 return null;
@@ -201,7 +202,7 @@ namespace Hawk.Core.Utils.Plugins
             XFrmWorkAttribute attr = PluginProvider.GetPluginAttribute(model.GetType());
 
             dockableManager.AddDockAbleContent(
-                frm, view1, new[] { pluginName, attr.LogoURL, attr.Description });
+                frm, view1, new[] { name, attr.LogoURL, attr.Description });
             dockableManager.ViewDictionary.Last().Model = model;
             return view1;
         }
@@ -229,6 +230,7 @@ namespace Hawk.Core.Utils.Plugins
             
                 rc.Value.SaveConfigFile();
             }
+            if(!PluginLoadControllor.IsNormalLoaded)
             PluginProvider.SaveConfigFile();
         }
 

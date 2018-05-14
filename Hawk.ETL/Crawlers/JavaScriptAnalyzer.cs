@@ -95,7 +95,11 @@ namespace Hawk.ETL.Crawlers
         }
         private static bool isBasicType(Object obj)
         {
-            if (obj is int || obj is string || obj is double || obj is bool || obj is Enum || obj == null)
+            if (obj is int || obj is string || obj is double || obj is bool || obj is Enum || obj is Int64)
+            {
+                return true;
+            }
+            if (obj == null)
             {
                 return true;
             }
@@ -234,7 +238,7 @@ namespace Hawk.ETL.Crawlers
                     {
                         return JsSeriaize(code);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
                         return code;
                     }

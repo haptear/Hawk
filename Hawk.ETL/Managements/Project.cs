@@ -5,8 +5,10 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Windows.Controls.WpfPropertyGrid.Attributes;
+using System.Windows.Data;
 using Hawk.Core.Connectors;
 using Hawk.Core.Utils;
+using Hawk.Core.Utils.Logs;
 using Hawk.Core.Utils.MVVM;
 using Hawk.Core.Utils.Plugins;
 
@@ -57,6 +59,7 @@ namespace Hawk.ETL.Managements
             {
                 project.DictDeserialize(r.DictSerialize());
             }
+            project.SavePath = path;
             return project;
         }
     }
@@ -86,11 +89,12 @@ namespace Hawk.ETL.Managements
         [LocalizedDisplayName("任务列表")]
         public ObservableCollection<ProcessTask> Tasks { get; set; }
 
+
+     
+
         public void Save()
         {
             var connector = new FileConnectorXML();
-
-
             if (SavePath != null && File.Exists(SavePath))
             {
                 connector.FileName = SavePath;
@@ -116,6 +120,15 @@ namespace Hawk.ETL.Managements
                 var result = connector.CheckFilePath(FileOperate.Read);
                 if (result == false)
                     return null;
+            }
+            else
+            {
+                if (!File.Exists(connector.FileName))
+                {
+                    XLogSys.Print.Error($"文件{connector.FileName}不存在");
+                    return null;
+                }
+             
             }
             var proj = connector.ReadFile().FirstOrDefault();
 
@@ -189,6 +202,13 @@ namespace Hawk.ETL.Managements
                 var mongo = new MongoDBConnector() {Name = "MongoDB连接器"};
                 mongo.DBName = "hawk";
                 DBConnections.Add(mongo);
+
+            }
+            if (DBConnections.FirstOrDefault(d => d.TypeName == "SQLite数据库") == null)
+            {
+                var sqlite = new SQLiteDatabase() { Name = "SQLite数据库" };
+                sqlite.DBName = "hawk-sqlite";
+                DBConnections.Add(sqlite);
 
             }
         }

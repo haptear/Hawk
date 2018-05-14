@@ -8,6 +8,7 @@ using System.Xml.Serialization;
 using Hawk.Core.Utils;
 using Hawk.Core.Utils.Logs;
 using Hawk.Core.Utils.Plugins;
+using Hawk.ETL.Process;
 using IronPython.Hosting;
 using Microsoft.Scripting;
 
@@ -32,6 +33,11 @@ namespace Hawk.ETL.Managements
         [XmlIgnore]
         [Browsable(false)]
         public FreeDocument ProcessToDo { get; set; }
+
+        [XmlIgnore]
+        [Browsable(false)]
+
+        public string TypeName => ProcessToDo?["Type"].ToString()=="SmartETLTool"?"数据清洗":"网页采集器";
 
         #endregion
 
@@ -122,12 +128,14 @@ namespace Hawk.ETL.Managements
                 ProcessToDo.DictCopyTo(process as IDictionarySerializable);
                 process.Init();
                 EvalScript();
-            }, LogType.Important, $"加载{Name}任务", true);
+            }, LogType.Important, $"加载{Name}任务", MainDescription.IsUIForm);
         }
 
         [LocalizedDisplayName("脚本路径")]
         [PropertyOrder(6)]
         public string ScriptPath { get; set; }
+
+  
 
         #endregion
     }

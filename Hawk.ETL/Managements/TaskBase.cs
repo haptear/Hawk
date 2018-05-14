@@ -81,9 +81,11 @@ namespace Hawk.ETL.Managements
         /// </summary>
         [LocalizedDisplayName("任务描述")]
         [PropertyOrder(3)]
+        [PropertyEditor("CodeEditor")]
         public string Description { get; set; }
 
-      
+     
+    
 
         [LocalizedDisplayName("名称")]
         [PropertyOrder(1)]
@@ -119,13 +121,6 @@ namespace Hawk.ETL.Managements
         public virtual void Start()
         {
             CancellationToken = new CancellationTokenSource();
-            CancellationToken.Token.Register(
-                () =>
-                {
-                //    ProcessManager.InvokeTaskFinished(this, new ProcessEventArgs(ProcessEventType.Cancel));
-                    if (AutoDelete == true)
-                        Remove();
-                });
             IsStart = true;
             StarTime = DateTime.Now;
             OnPropertyChanged("StarTime");
@@ -137,18 +132,14 @@ namespace Hawk.ETL.Managements
             ControlExtended.UIInvoke(() => ProcessManager.CurrentProcessTasks.Remove(this));
             CancellationToken?.Cancel();
             autoReset.Close();
-            
+            IsStart = false;
+            IsCanceled = true;
+
         }
         [Browsable(false)]
         public IProcessManager ProcessManager { get; set; }
 
-        public void Cancel()
-        {
-            IsStart = false;
-            IsCanceled = true;
-            CancellationToken.Cancel();
-          
-        }
+       
 
         [Browsable(false)]
         public bool IsCanceled { get; private set; }
@@ -199,4 +190,6 @@ namespace Hawk.ETL.Managements
         protected CancellationTokenSource CancellationToken { get; set; }
 
     }
+
+
 }

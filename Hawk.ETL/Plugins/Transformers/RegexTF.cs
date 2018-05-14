@@ -6,6 +6,7 @@ using System.Windows.Controls.WpfPropertyGrid.Attributes;
 using Hawk.Core.Connectors;
 using Hawk.Core.Utils;
 using Hawk.Core.Utils.Plugins;
+using Hawk.ETL.Crawlers;
 
 namespace Hawk.ETL.Plugins.Transformers
 {
@@ -19,17 +20,20 @@ namespace Hawk.ETL.Plugins.Transformers
         {
             Index = 0;
             Script = "";
+            IsManyData=ScriptWorkMode.One;
         }
-        [LocalizedDisplayName("返回多个结果")]
-        public override bool IsMultiYield { get; set; }
+       
+        [PropertyOrder(0)]
+        [LocalizedDisplayName("工作模式")]
+        [LocalizedDescription("当要输出多个结果时选List，否则选One或None,参考“网页采集器”")]
+        public ScriptWorkMode IsManyData { get; set; }
 
-
-
+        [PropertyOrder(2)]
         [LocalizedDisplayName("匹配编号")]
         [LocalizedDescription("当值为小于0时，可同时匹配多个值")]
         public int Index { get; set; }
 
-        
+        [PropertyOrder(1)]
         [LocalizedDisplayName("表达式")]
         [PropertyEditor("DynamicScriptEditor")]
         public string Script { get; set; }
@@ -37,13 +41,14 @@ namespace Hawk.ETL.Plugins.Transformers
         [LocalizedCategory("1.基本选项")]
         [PropertyOrder(2)]
         [LocalizedDisplayName("输出列")]
-        [LocalizedDescription("若编号为小于0且匹配出多个新列，列名可用可用空格分割，若该列不需要添加，可用_表示，如'_ 匹配1 _'")]
+        [LocalizedDescription("若编号为小于0且匹配出多个新列，多个列名可用空格分割，若该列不需要添加，可用_表示，如'_ 匹配1 _'")]
         public override string NewColumn { get; set; }
 
 
         public override bool Init(IEnumerable<IFreeDocument> docu)
         {
             OneOutput = true;
+            IsMultiYield = IsManyData == ScriptWorkMode.List;
             regex = new Regex(Script);
             return base.Init(docu);
 
@@ -64,7 +69,8 @@ namespace Hawk.ETL.Plugins.Transformers
                 foreach (var p in r)
                 {
                     var doc=new FreeDocument();
-                    doc.Add("regex",p);
+                    doc.MergeQuery(data, NewColumn);
+                    doc.SetValue(Column,p);
                     yield return doc.MergeQuery( data, NewColumn);
                 
                 }

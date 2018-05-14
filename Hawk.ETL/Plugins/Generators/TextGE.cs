@@ -10,7 +10,7 @@ using Hawk.ETL.Interfaces;
 
 namespace Hawk.ETL.Plugins.Generators
 {
-     [XFrmWork("从文本生成","每行一条数据" )]
+     [XFrmWork("从文本生成","每行一条数据，常用" )]
     public class TextGE : GeneratorBase
     {
          List<string> argsList=new List<string>();
@@ -26,6 +26,7 @@ namespace Hawk.ETL.Plugins.Generators
          public TextGE()
          {
              Column = "text";
+             Content = "";
          }
 
      
@@ -48,7 +49,7 @@ namespace Hawk.ETL.Plugins.Generators
              }
              return base.Init(datas);
          }
-         public override IEnumerable<FreeDocument> Generate(IFreeDocument document = null)
+         public override IEnumerable<IFreeDocument> Generate(IFreeDocument document = null)
          {
              return argsList.Select(doc => new FreeDocument {{this.Column, doc}});
          }

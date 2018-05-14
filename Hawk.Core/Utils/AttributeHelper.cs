@@ -73,7 +73,7 @@ namespace Hawk.Core.Utils
         {
             if (type.IsEnum)
                 return true;
-            return type == typeof(int) || type == typeof(bool) || type == typeof(double) ||   type == typeof(Single) || type == typeof(string) || type == typeof(short) ||
+            return type == typeof(int) || type == typeof(bool) || type == typeof(DateTime) || type == typeof(TimeSpan) || type == typeof(double) ||   type == typeof(Single) || type == typeof(string) || type == typeof(short) ||
                    type == typeof(byte);
         }
 
@@ -135,6 +135,7 @@ namespace Hawk.Core.Utils
                 var xFrmWorkAttribute = attribute as XFrmWorkAttribute;
                 if (xFrmWorkAttribute != null)
                 {
+                    xFrmWorkAttribute.MyType = source;
                     return xFrmWorkAttribute;
                 }
             }
@@ -150,11 +151,7 @@ namespace Hawk.Core.Utils
         public static string GetDescription(Enum source)
         {
             var attr = GetCustomAttribute<DescriptionAttribute>(source);
-            if (attr == null)
-            {
-                return null;
-            }
-            return attr.Description;
+            return attr?.Description;
         }
 
 

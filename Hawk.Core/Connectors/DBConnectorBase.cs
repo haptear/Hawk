@@ -19,6 +19,8 @@ namespace Hawk.Core.Connectors
     /// <summary>
     ///     列信息
     /// </summary>
+    /// 
+
     public class ColumnInfo : PropertyChangeNotifier, IDictionarySerializable
     {
         #region Constructors and Destructors
@@ -133,15 +135,16 @@ namespace Hawk.Core.Connectors
             ColumnInfos=new List<ColumnInfo>();
         }
 
-        [LocalizedDisplayName("列特性")]
+        [Browsable(false)]
         public List<ColumnInfo> ColumnInfos { get; set; }
-
+        [PropertyOrder(1)]
         [LocalizedDisplayName("表大小")]
         public int Size { get; set; }
 
+        [PropertyOrder(0)]
         [LocalizedDisplayName("名称")]
         public string Name { get; set; }
-
+        [PropertyOrder(2)]
         [LocalizedDisplayName("描述")]
         public string Description { get; set; }
 
@@ -213,6 +216,7 @@ namespace Hawk.Core.Connectors
 
 
             TableNames = new ExtendSelector<TableInfo>();
+            TableNames.SetSource(new List<TableInfo>());
             AutoConnect = false;
         }
 
@@ -229,8 +233,16 @@ namespace Hawk.Core.Connectors
                 }
                 else
                 {
-                    value = o.Value.ToString();
+                    if (o.Value == null)
+                    {
+                        value = "null";
+                    }
+                    else
+                    {
+                        value = o.Value.ToString();
+                    }
                 }
+                value = value.Replace("'", "''");
                 sb.Append($"'{value}',");
             }
             sb.Remove(sb.Length - 1, 1);
@@ -290,24 +302,24 @@ namespace Hawk.Core.Connectors
         private string name;
 
         [LocalizedCategory("参数设置")]
-        [LocalizedDisplayName("操作表名")]
+        [LocalizedDisplayName("表名")]
         public ExtendSelector<TableInfo> TableNames { get; set; }
 
         [LocalizedDisplayName("服务器地址")]
         [LocalizedCategory("1.连接管理")]
         [PropertyOrder(2)]
-        public string Server { get; set; }
+        public virtual  string Server { get; set; }
 
         [LocalizedDisplayName("用户名")]
         [LocalizedCategory("1.连接管理")]
         [PropertyOrder(3)]
-        public string UserName { get; set; }
+        public virtual string UserName { get; set; }
 
         [LocalizedDisplayName("密码")]
         [LocalizedCategory("1.连接管理")]
         [PropertyOrder(4)]
       //  [PropertyEditor("PasswordEditor")]
-        public string Password { get; set; }
+        public virtual string Password { get; set; }
 
         [LocalizedCategory("参数设置")]
         [LocalizedDisplayName("数据库类型")]
@@ -343,19 +355,16 @@ namespace Hawk.Core.Connectors
         [LocalizedCategory("1.连接管理")]
         [LocalizedDisplayName("数据库名称")]
         [PropertyOrder(2)]
-        public string DBName { get; set; }
+        public  virtual string DBName { get; set; }
 
+       
 
         public virtual bool CreateTable(IFreeDocument example, string name)
         {
+            if (string.IsNullOrEmpty(name))
+                throw new Exception("数据库表名不能为空");
             FreeDocument txt = example.DictSerialize(Scenario.Database);
-            var sb = new StringBuilder();
-            foreach (var o in txt)
-            {
-                sb.Append(o.Key);
-                sb.AppendFormat(" {0},", DataTypeConverter.ToType(o.Value));
-            }
-            sb.Remove(sb.Length - 1, 1);
+            var sb = string.Join(",", txt.Select(d => $"{ ScriptHelper.RemoveSpecialCharacter(d.Key)} {DataTypeConverter.ToType(d.Value)}"));
             string sql = $"CREATE TABLE {GetTableName(name)} ({sb})";
             ExecuteNonQuery(sql);
             RefreshTableNames();
@@ -441,6 +450,7 @@ namespace Hawk.Core.Connectors
             }
             catch (Exception ex)
             {
+                XLogSys.Print.Error($"数据库删除失败: {ex}" );
             }
         }
 
@@ -476,26 +486,25 @@ namespace Hawk.Core.Connectors
         public virtual void SaveOrUpdateEntity(
             IFreeDocument updateItem, string tableName,  IDictionary<string, object> keys,EntityExecuteType executeType=EntityExecuteType.InsertOrUpdate)
         {
-            var sb = new StringBuilder();
             FreeDocument data = updateItem.DictSerialize(Scenario.Database);
-
-            if (data.Count >= 1)
+            foreach (var key in data.Keys.ToList())
             {
-                foreach (var val in data)
-                {
-                    sb.Append($" {val.Key} = '{val.Value}',");
-                }
-
-                sb = sb.Remove(sb.Length - 1, 1);
+                var value = "";
+                if (data[key] != null)
+                    value = data[key].ToString();
+                value = value.Replace("'","''" );
+                data[key] = value;
             }
-
+            var str =",".Join( data.Select(d => $"{d.Key}='{d.Value}'"));            
+           
             try
             {
-                ExecuteNonQuery($"update {GetTableName(tableName)} set {sb} where {ToString()};");
+                ExecuteNonQuery($"update {GetTableName(tableName)} set {str} ");
             }
 
-            catch
+            catch (Exception e)
             {
+                XLogSys.Print.Debug($"insert database error {e.Message}");
             }
         }
 
@@ -542,7 +551,7 @@ namespace Hawk.Core.Connectors
 
         protected virtual string GetTableName(string tableName)
         {
-            return tableName.Replace(" ", "");
+            return  ScriptHelper.RemoveSpecialCharacter(tableName);
         }
 
         protected virtual DataTable GetDataTable(string sql)
@@ -561,7 +570,7 @@ namespace Hawk.Core.Connectors
 
         [LocalizedDisplayName("执行")]
         [PropertyOrder(20)]
-        public ReadOnlyCollection<ICommand> Commands
+        public virtual  ReadOnlyCollection<ICommand> Commands
         {
             get
             {
@@ -577,9 +586,9 @@ namespace Hawk.Core.Connectors
                             {
                                 RefreshTableNames();
                             }
-                        }, obj => IsUseable == false),
-                        new Command("关闭连接", obj => CloseDB(), obj => IsUseable),
-                        new Command("创建新库", obj => CreateDataBase(DBName), obj => string.IsNullOrEmpty(DBName) == false)
+                        }, obj => IsUseable == false,"connect"),
+                        new Command("关闭连接", obj => CloseDB(), obj => IsUseable,"close"),
+                        new Command("创建新库", obj => CreateDataBase(DBName), obj => string.IsNullOrEmpty(DBName) == false,"add")
                     });
             }
         }
